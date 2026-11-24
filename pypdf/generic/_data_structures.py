@@ -1624,25 +1624,52 @@ class ContentStream(DecodedStreamObject):
         position = 0
         operands: list[int | str | PdfObject] = []
         parsing_budget = StreamParsingBudget(remaining_budget=get_configuration().stream_parsing_work_maximum_count)
+        remaining = parsing_budget.remaining_budget
+        # Values repeat a lot in large content streams, and the objects are
+        # immutable, so each distinct token is created once per stream.
+        floats: dict[bytes, FloatObject] = {}
+        ints: dict[bytes, NumberObject] = {}
+        names: dict[bytes, NameObject] = {}
+        operators: dict[bytes, bytes] = {}
+        match_token = _CONTENT_STREAM_SIMPLE_TOKEN.match
+        append_operation = self._operations.append
+        append_operand = operands.append
         while True:
-            match = _CONTENT_STREAM_SIMPLE_TOKEN.match(data, position)
+            match = match_token(data, position)
             if match is not None:
-                self._check_limits(parsing_budget=parsing_budget, token_decrement=1)
+                remaining -= 1
+                if remaining < 0:
+                    raise LimitReachedError("Reached maximum number of tokens per stream.")
                 position = match.end()
-                float_value, int_value, name, operator = match.groups()
-                if operator is not None:
-                    self._operations.append((operands, operator))
+                group = match.lastindex
+                token = match[group]
+                if group == 1:  # float
+                    value = floats.get(token)
+                    if value is None:
+                        # Only valid numbers are matched, thus skip the error
+                        # handling of the constructors.
+                        value = floats[token] = float.__new__(FloatObject, token)
+                    append_operand(value)
+                elif group == 4:  # operator
+                    operator = operators.get(token)
+                    if operator is None:
+                        operator = operators[token] = token
+                    append_operation((operands, operator))
                     operands = []
-                # Only valid numbers are matched, thus skip the error handling
-                # of the constructors, which is costly for millions of numbers.
-                elif float_value is not None:
-                    operands.append(float.__new__(FloatObject, float_value))
-                elif int_value is not None:
-                    operands.append(int.__new__(NumberObject, int_value))
-                else:
-                    operands.append(NameObject(name.decode()))
+                    append_operand = operands.append
+                elif group == 2:  # int
+                    value = ints.get(token)
+                    if value is None:
+                        value = ints[token] = int.__new__(NumberObject, token)
+                    append_operand(value)
+                else:  # name
+                    value = names.get(token)
+                    if value is None:
+                        value = names[token] = NameObject(token.decode())
+                    append_operand(value)
                 continue
 
+            parsing_budget.remaining_budget = remaining
             stream.seek(position, 0)
             peek = read_non_whitespace(stream)
             if peek in (b"", 0):
@@ -1677,6 +1704,8 @@ class ContentStream(DecodedStreamObject):
                 self._check_limits(parsing_budget=parsing_budget, token_decrement=1)
                 operands.append(read_object(stream, None, self.forced_encoding, parsing_budget=parsing_budget))
             position = stream.tell()
+            remaining = parsing_budget.remaining_budget
+            append_operand = operands.append
 
     # This overrides the parent method
     def get_data(self) -> bytes:
