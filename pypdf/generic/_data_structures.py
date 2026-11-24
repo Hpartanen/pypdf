@@ -1681,23 +1681,38 @@ class ContentStream(DecodedStreamObject):
     # This overrides the parent method
     def get_data(self) -> bytes:
         if not self._data:
-            new_data = BytesIO()
+            parts: list[bytes] = []
+            append = parts.append
+            # Numbers and names repeat a lot in large content streams (drawing
+            # coordinates, font and graphics state names), so each exact type
+            # caches the bytes it writes, followed by the separating space.
+            caches: dict[type, dict[Any, bytes]] = {FloatObject: {}, NumberObject: {}, NameObject: {}}
+            scratch = BytesIO()
             for operands, operator in self._operations:
                 if operator == b"INLINE IMAGE":
-                    new_data.write(b"BI")
+                    append(b"BI")
                     dict_text = BytesIO()
                     operands["settings"].write_to_stream(dict_text)
-                    new_data.write(dict_text.getvalue()[2:-2])
-                    new_data.write(b"ID ")
-                    new_data.write(operands["data"])
-                    new_data.write(b"EI")
+                    append(dict_text.getvalue()[2:-2])
+                    append(b"ID ")
+                    append(operands["data"])
+                    append(b"EI")
                 else:
                     for op in operands:
-                        op.write_to_stream(new_data)
-                        new_data.write(b" ")
-                    new_data.write(operator)
-                new_data.write(b"\n")
-            self._data = new_data.getvalue()
+                        cache = caches.get(type(op))
+                        encoded = None if cache is None else cache.get(op)
+                        if encoded is None:
+                            scratch.seek(0)
+                            scratch.truncate()
+                            op.write_to_stream(scratch)
+                            scratch.write(b" ")
+                            encoded = scratch.getvalue()
+                            if cache is not None:
+                                cache[op] = encoded
+                        append(encoded)
+                    append(operator)
+                append(b"\n")
+            self._data = b"".join(parts)
         return self._data
 
     # This overrides the parent method
