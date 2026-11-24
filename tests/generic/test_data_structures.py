@@ -1357,3 +1357,67 @@ def test_dictionary_object__clone__chain_with_direct_dictionary() -> None:
     assert last_clone == last
     assert last_clone is not last
     assert getattr(last_clone, "indirect_reference", None) is None
+
+
+def _serialize_operations_one_by_one(operations: list[tuple[object, bytes]]) -> bytes:
+    """What ContentStream.get_data() wrote before it cached the operands."""
+    out = BytesIO()
+    for operands, operator in operations:
+        if operator == b"INLINE IMAGE":
+            out.write(b"BI")
+            settings = BytesIO()
+            operands["settings"].write_to_stream(settings)
+            out.write(settings.getvalue()[2:-2])
+            out.write(b"ID ")
+            out.write(operands["data"])
+            out.write(b"EI")
+        else:
+            for operand in operands:
+                operand.write_to_stream(out)
+                out.write(b" ")
+            out.write(operator)
+        out.write(b"\n")
+    return out.getvalue()
+
+
+def test_content_stream__get_data__same_bytes_as_operand_by_operand() -> None:
+    from pypdf.generic import FloatObject  # noqa: PLC0415
+
+    stream = DecodedStreamObject()
+    stream.set_data(
+        b"q 1 0 0 1 10.5 -2 cm /GS1 gs /A#20B gs (a\\)b) Tj [1 (x) -2.5] TJ "
+        b"BI /W 1 /H 1 /BPC 8 /CS /G ID \x7f EI 10.5 -2 m 0.123456789 -0.0 l 0 0.0 l 1 1.0 l S Q"
+    )
+    content_stream = ContentStream(stream, None)
+    operations = content_stream.operations
+    operations.append(([FloatObject(1), NumberObject(1), NameObject("/1")], b"x"))
+    expected = _serialize_operations_one_by_one(operations)
+
+    content_stream.operations = operations
+
+    assert content_stream.get_data() == expected
+    assert b"/A#20B gs" in expected
+    assert b"\n1 1 /1 x\n" in expected
+
+
+def test_content_stream__get_data__subclasses_write_themselves() -> None:
+    from pypdf.generic import FloatObject  # noqa: PLC0415
+
+    class StarredFloat(FloatObject):
+        def write_to_stream(self, stream: BytesIO) -> None:  # type: ignore[override]
+            stream.write(b"*")
+
+    content_stream = ContentStream(None, None)
+    content_stream.operations = [
+        ([FloatObject(1.5), StarredFloat(1.5), FloatObject(1.5)], b"x"),
+        ([StarredFloat(2), TextStringObject("t")], b"y"),
+    ]
+
+    assert content_stream.get_data() == b"1.5 * 1.5 x\n* (t) y\n"
+
+
+def test_content_stream__get_data__no_operations() -> None:
+    content_stream = ContentStream(None, None)
+    content_stream.operations = []
+
+    assert content_stream.get_data() == b""
