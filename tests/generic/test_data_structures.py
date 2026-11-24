@@ -1415,7 +1415,7 @@ def test_content_stream__iter_operations__budget() -> None:
     with apply_configuration(stream_parsing_work_maximum_count=4):
         iterator = content_stream.iter_operations()
         assert next(iterator) == ([1, 2], b"m")
-        with pytest.raises(LimitReachedError, match="^Reached maximum number of tokens per stream.$"):
+        with pytest.raises(LimitReachedError, match=r"^Reached maximum number of tokens per stream\.$"):
             next(iterator)
 
 

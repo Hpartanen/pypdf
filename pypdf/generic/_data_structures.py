@@ -39,7 +39,6 @@ from functools import cache
 from io import BytesIO
 from typing import (
     Any,
-    Iterator,
     NamedTuple,
     Optional,
     Union,
