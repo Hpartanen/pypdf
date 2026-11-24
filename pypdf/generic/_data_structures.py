@@ -39,6 +39,7 @@ from functools import cache
 from io import BytesIO
 from typing import (
     Any,
+    Iterator,
     NamedTuple,
     Optional,
     Union,
@@ -1618,6 +1619,21 @@ class ContentStream(DecodedStreamObject):
         return remaining_elements
 
     def _parse_content_stream(self, stream: StreamType) -> None:
+        self._operations.extend(self._iter_content_stream(stream))
+
+    def iter_operations(self) -> Iterator[tuple[Any, bytes]]:
+        """
+        Iterate over the operations without storing them.
+
+        When the operations have not been parsed yet, they are read one at a time from the
+        content data, so a caller passing through them once holds only the current operation
+        in memory. The content data is kept, unlike after ``operations``.
+        """
+        if self._operations or not self._data:
+            return iter(self._operations)
+        return self._iter_content_stream(BytesIO(self._data))
+
+    def _iter_content_stream(self, stream: StreamType) -> Iterator[tuple[Any, bytes]]:
         # 7.8.2 Content Streams
         stream.seek(0, 0)
         data = stream.read()
@@ -1631,7 +1647,7 @@ class ContentStream(DecodedStreamObject):
                 position = match.end()
                 float_value, int_value, name, operator = match.groups()
                 if operator is not None:
-                    self._operations.append((operands, operator))
+                    yield (operands, operator)
                     operands = []
                 # Only valid numbers are matched, thus skip the error handling
                 # of the constructors, which is costly for millions of numbers.
@@ -1660,10 +1676,10 @@ class ContentStream(DecodedStreamObject):
 
                     from ._image_inline import read_inline_image  # noqa: PLC0415
                     ii = read_inline_image(content_stream=self, stream=stream, parsing_budget=parsing_budget)
-                    self._operations.append((ii, b"INLINE IMAGE"))
+                    yield (ii, b"INLINE IMAGE")
                 else:
                     self._check_limits(parsing_budget=parsing_budget, token_decrement=1)
-                    self._operations.append((operands, operator))
+                    yield (operands, operator)
                     operands = []
             elif peek == b"%":
                 # If we encounter a comment in the content stream, we have to

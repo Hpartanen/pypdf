@@ -1950,7 +1950,7 @@ class PageObject(DictionaryObject):
         extractor = TextExtraction()
         extractor.initialize_extraction(orientations, visitor_text, font_resources, fonts)
 
-        for operands, operator in content.operations:
+        for operands, operator in content.iter_operations():
             if visitor_operand_before is not None:
                 visitor_operand_before(operator, operands, extractor.cm_matrix, extractor.tm_matrix)
             # Multiple operators are handled here
@@ -2194,7 +2194,7 @@ class PageObject(DictionaryObject):
             # No content can be extracted (certainly an empty page).
             return ""
 
-        ops = iter(ContentStream(contents, self.pdf, "bytes").operations)
+        ops = ContentStream(contents, self.pdf, "bytes").iter_operations()
         bt_groups = _layout_mode.text_show_operations(
             ops, fonts, strip_rotated, debug_path
         )
