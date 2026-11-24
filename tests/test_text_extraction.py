@@ -1854,7 +1854,7 @@ def test_extract_text__content_without_text_operators_is_not_parsed() -> None:
     # A gray rectangle, as in a figure: only color, path construction and painting.
     page = PdfReader(_page_with_helvetica(b"0.5 g 10 10 100 100 re f")).pages[0]
 
-    with mock.patch.object(ContentStream, "_parse_content_stream", autospec=True) as parse:
+    with mock.patch.object(ContentStream, "_iter_content_stream", autospec=True) as parse:
         assert page.extract_text() == ""
 
     parse.assert_not_called()
@@ -1866,7 +1866,7 @@ def test_extract_text__content_without_text_operators_is_parsed_for_visitors(vis
     page = PdfReader(_page_with_helvetica(b"0.5 g 10 10 100 100 re f")).pages[0]
 
     with mock.patch.object(
-        ContentStream, "_parse_content_stream", autospec=True, side_effect=ContentStream._parse_content_stream
+        ContentStream, "_iter_content_stream", autospec=True, side_effect=ContentStream._iter_content_stream
     ) as parse:
         assert page.extract_text(**{visitor: lambda *_: None}) == ""
 
