@@ -544,7 +544,7 @@ def test_add_transformation__prepends_cm_to_the_content(parsed):
     contents = ContentStream(None, None)
     contents.set_data(data)
     if parsed:
-        contents.operations  # noqa: B018
+        contents.operations
     page = PageObject()
     page[NameObject("/Contents")] = contents
     with mock.patch.object(
