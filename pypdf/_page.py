@@ -1098,6 +1098,9 @@ class PageObject(DictionaryObject):
                         new_res[newname] = new_res[newname].indirect_reference
                 else:
                     new_res[newname] = page2res.raw_get(key)
+        # Sorting once at the end gives the same keys and order as sorting after
+        # each merged key, which took quadratic time for pages with many resources.
+        if page2res:
             lst = sorted(new_res.items())
             new_res.clear()
             for el in lst:

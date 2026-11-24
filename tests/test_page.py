@@ -2509,3 +2509,53 @@ def test_get_fonts__resources_are_null(caplog):
     assert embedded == set()
     assert unembedded == set()
     assert "Resources are not a dictionary" not in caplog.text
+
+
+def test_merge_resources__sorted_keys_and_renames() -> None:
+    writer = PdfWriter()
+    page = writer.add_blank_page(100, 100)
+    res1 = DictionaryObject(
+        {
+            NameObject("/XObject"): DictionaryObject(
+                {NameObject("/Fm2"): NumberObject(2), NameObject("/Fm0"): NumberObject(0)}
+            )
+        }
+    )
+    res2 = DictionaryObject(
+        {
+            NameObject("/XObject"): DictionaryObject(
+                {
+                    NameObject("/Fm1"): NumberObject(10),
+                    NameObject("/Fm0"): NumberObject(0),  # the same value: kept, not renamed
+                    NameObject("/Fm2"): NumberObject(12),  # another value: renamed
+                }
+            )
+        }
+    )
+
+    merged, renames = page._merge_resources(res1, res2, "/XObject")
+
+    assert list(merged.items()) == [
+        ("/Fm0", 0),
+        ("/Fm1", 10),
+        ("/Fm2", 2),
+        ("/Fm2-0", 12),
+    ]
+    assert renames == {"/Fm2": "/Fm2-0"}
+
+
+def test_merge_resources__nothing_to_merge_keeps_the_order() -> None:
+    writer = PdfWriter()
+    page = writer.add_blank_page(100, 100)
+    res1 = DictionaryObject(
+        {
+            NameObject("/XObject"): DictionaryObject(
+                {NameObject("/Fm2"): NumberObject(2), NameObject("/Fm0"): NumberObject(0)}
+            )
+        }
+    )
+
+    merged, renames = page._merge_resources(res1, DictionaryObject(), "/XObject")
+
+    assert list(merged) == ["/Fm2", "/Fm0"]
+    assert renames == {}
