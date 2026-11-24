@@ -538,6 +538,27 @@ def test_add_transformation_on_page_without_contents():
     assert isinstance(page.get_contents(), ContentStream)
 
 
+@pytest.mark.parametrize("parsed", [False, True])
+def test_add_transformation__prepends_cm_to_the_content(parsed):
+    data = b"1.5 0 m 3 4 l S"
+    contents = ContentStream(None, None)
+    contents.set_data(data)
+    if parsed:
+        contents.operations  # noqa: B018
+    page = PageObject()
+    page[NameObject("/Contents")] = contents
+    with mock.patch.object(
+        ContentStream, "_parse_content_stream", autospec=True,
+        side_effect=ContentStream._parse_content_stream,
+    ) as parse:
+        page.add_transformation(Transformation().translate(5, 6))
+        result = page.get_contents()
+        if not parsed:
+            assert parse.call_count == 0  # one cm does not need the content parsed
+    assert [op for _, op in result.operations] == [b"q", b"cm", b"m", b"l", b"S", b"Q"]
+    assert [float(x) for x in result.operations[1][0]] == [1, 0, 0, 1, 5, 6]
+
+
 @pytest.mark.enable_socket
 def test_iss_1142():
     # check fix for problem of context save/restore (q/Q)

@@ -1134,13 +1134,16 @@ class PageObject(DictionaryObject):
     ) -> ContentStream:
         """Add transformation matrix at the beginning of the given contents stream."""
         content_stream = ContentStream(contents, pdf)
-        content_stream.operations.insert(
-            0,
-            (
-                [FloatObject(x) for x in ctm],
-                b"cm",
-            ),
-        )
+        operation = ([FloatObject(x) for x in ctm], b"cm")
+        if not content_stream._operations and content_stream._data:
+            # Not parsed yet: prepend the operation to the data, as
+            # isolate_graphics_state() does, instead of parsing and writing
+            # back the whole content for one operation.
+            prefix = ContentStream(None, pdf)
+            prefix.operations = [operation]
+            content_stream.set_data(prefix.get_data() + content_stream._data)
+        else:
+            content_stream.operations.insert(0, operation)
         return content_stream
 
     def _get_contents_as_bytes(self) -> bytes | None:
