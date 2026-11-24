@@ -1398,6 +1398,9 @@ def test_content_stream__iter_operations__parsed_or_set_operations() -> None:
 
     assert list(content_stream.iter_operations()) == operations
     assert next(content_stream.iter_operations()) is operations[0]
+    # Serialising keeps the operations; they are still the ones iterated.
+    assert content_stream.get_data() == b"1 2 m\nS\n"
+    assert next(content_stream.iter_operations()) is operations[0]
 
     replaced = [([NumberObject(5), NumberObject(6)], b"m")]
     content_stream.operations = replaced
