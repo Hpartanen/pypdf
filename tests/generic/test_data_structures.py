@@ -1412,7 +1412,7 @@ def test_content_stream__parse__budget_counts_every_token(budget: int, raises: b
 
     with apply_configuration(stream_parsing_work_maximum_count=budget):
         if raises:
-            with pytest.raises(LimitReachedError, match="^Reached maximum number of tokens per stream.$"):
+            with pytest.raises(LimitReachedError, match=r"^Reached maximum number of tokens per stream\.$"):
                 content_stream.operations
         else:
             assert len(content_stream.operations) == 12
