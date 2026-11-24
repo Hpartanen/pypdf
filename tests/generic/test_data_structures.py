@@ -1357,3 +1357,32 @@ def test_dictionary_object__clone__chain_with_direct_dictionary() -> None:
     assert last_clone == last
     assert last_clone is not last
     assert getattr(last_clone, "indirect_reference", None) is None
+
+
+@pytest.mark.parametrize("stream_class", [StreamObject, ContentStream])
+def test_stream_object__replicate__keeps_the_source_decoded_self(stream_class: type) -> None:
+    decoded = DecodedStreamObject()
+    decoded.set_data(b"1 2 m")
+    source = stream_class(None, None) if stream_class is ContentStream else stream_class()
+    source.set_data(b"compressed")
+    source.decoded_self = decoded
+    writer = PdfWriter()
+
+    copy = source.replicate(writer)
+
+    assert source.decoded_self is decoded
+    assert copy.decoded_self is not None
+    assert copy.decoded_self is not decoded
+    assert copy.decoded_self.get_data() == b"1 2 m"
+
+
+@pytest.mark.parametrize("stream_class", [StreamObject, ContentStream])
+def test_stream_object__replicate__without_decoded_self(stream_class: type) -> None:
+    source = stream_class(None, None) if stream_class is ContentStream else stream_class()
+    source.set_data(b"data")
+    source.decoded_self = None
+
+    copy = source.replicate(PdfWriter())
+
+    assert copy.decoded_self is None
+    assert copy.get_data() == b"data"

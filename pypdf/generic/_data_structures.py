@@ -1202,9 +1202,9 @@ class StreamObject(DictionaryObject):
         try:
             decoded_self = self.decoded_self
             if decoded_self is None:
-                self.decoded_self = None
+                d__.decoded_self = None
             else:
-                self.decoded_self = cast(
+                d__.decoded_self = cast(
                     "DecodedStreamObject", decoded_self.replicate(pdf_dest)
                 )
         except MemoryError:  # pragma: no cover  # TODO: BLE001
@@ -1519,9 +1519,9 @@ class ContentStream(DecodedStreamObject):
         try:
             decoded_self = self.decoded_self
             if decoded_self is None:
-                self.decoded_self = None
+                d__.decoded_self = None
             else:
-                self.decoded_self = cast(
+                d__.decoded_self = cast(
                     "DecodedStreamObject", decoded_self.replicate(pdf_dest)
                 )
         except MemoryError:  # pragma: no cover  # TODO: BLE001
