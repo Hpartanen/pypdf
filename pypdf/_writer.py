@@ -2240,33 +2240,35 @@ class PdfWriter(PdfDocCommon):
         if text_filters and to_delete & ObjectDeletionFlag.TEXT:
             font_ids_to_delete = text_filters.get("font_ids", [])
 
-        i = 0
-        while i < len(content.operations):
-            operands, operator = content.operations[i]
+        # Collect the operations to keep in one pass: deleting them one by one
+        # from a list of millions of operations moves the rest of it each time.
+        operations = content.operations
+        kept = []
+        for operands, operator in operations:
             if operator == b"Tf":
                 font_id = operands[0]
             if (
                 (
-                    operator == b"INLINE IMAGE"
-                    and (to_delete & ObjectDeletionFlag.INLINE_IMAGES)
+                    (
+                        operator == b"INLINE IMAGE"
+                        and (to_delete & ObjectDeletionFlag.INLINE_IMAGES)
+                    )
+                    or (operator in jump_operators)
+                    or (
+                        operator == b"Do"
+                        and (to_delete & ObjectDeletionFlag.XOBJECT_IMAGES)
+                        and (operands[0] in images)
+                    )
                 )
-                or (operator in jump_operators)
-                or (
-                    operator == b"Do"
-                    and (to_delete & ObjectDeletionFlag.XOBJECT_IMAGES)
-                    and (operands[0] in images)
-                )
-            ):
-                if (
+                and not (
                     operator in _TEXT_SHOWING_OPERATORS
                     and text_filters
                     and font_id not in font_ids_to_delete
-                ):
-                    i += 1
-                else:
-                    del content.operations[i]
-            else:
-                i += 1
+                )
+            ):
+                continue
+            kept.append((operands, operator))
+        operations[:] = kept
         content.get_data()  # this ensures ._data is rebuilt from the .operations
 
     def _remove_objects_from_page__clean_forms(
