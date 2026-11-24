@@ -1357,3 +1357,93 @@ def test_dictionary_object__clone__chain_with_direct_dictionary() -> None:
     assert last_clone == last
     assert last_clone is not last
     assert getattr(last_clone, "indirect_reference", None) is None
+
+
+_MIXED_CONTENT = (
+    b"q 1 0 0 1 10.5 -2 cm /GS1 gs (a\\)b) Tj [1 (x) -2.5] TJ "
+    b"BI /W 1 /H 1 /BPC 8 /CS /G ID \x7f EI 3 4 m 1 2 l S /F1 12 Tf Q"
+)
+
+
+def _content_stream(data: bytes) -> ContentStream:
+    stream = DecodedStreamObject()
+    stream.set_data(data)
+    return ContentStream(stream, None)
+
+
+def test_content_stream__iter_operations__same_as_operations_without_storing_them() -> None:
+    content_stream = _content_stream(_MIXED_CONTENT)
+
+    iterated = list(content_stream.iter_operations())
+
+    assert content_stream._operations == []
+    assert content_stream.get_data() == _MIXED_CONTENT
+    assert iterated == _content_stream(_MIXED_CONTENT).operations
+    assert len(iterated) == 11
+
+
+def test_content_stream__iter_operations__parses_on_each_pass() -> None:
+    content_stream = _content_stream(b"1 2 m 3 4 l S")
+
+    first = list(content_stream.iter_operations())
+    second = list(content_stream.iter_operations())
+
+    assert first == second == [([1, 2], b"m"), ([3, 4], b"l"), ([], b"S")]
+    assert first[0][0] is not second[0][0]
+
+
+def test_content_stream__iter_operations__parsed_or_set_operations() -> None:
+    content_stream = _content_stream(b"1 2 m S")
+    operations = content_stream.operations
+
+    assert list(content_stream.iter_operations()) == operations
+    assert next(content_stream.iter_operations()) is operations[0]
+
+    replaced = [([NumberObject(5), NumberObject(6)], b"m")]
+    content_stream.operations = replaced
+    assert list(content_stream.iter_operations()) == replaced
+
+
+def test_content_stream__iter_operations__empty() -> None:
+    assert list(_content_stream(b"").iter_operations()) == []
+    assert list(_content_stream(b"  \n ").iter_operations()) == []
+
+
+def test_content_stream__iter_operations__budget() -> None:
+    content_stream = _content_stream(b"1 2 m 3 4 l S")
+
+    with apply_configuration(stream_parsing_work_maximum_count=4):
+        iterator = content_stream.iter_operations()
+        assert next(iterator) == ([1, 2], b"m")
+        with pytest.raises(LimitReachedError, match="^Reached maximum number of tokens per stream.$"):
+            next(iterator)
+
+
+def test_page__extract_text__does_not_keep_the_parsed_operations() -> None:
+    writer = PdfWriter()
+    page = writer.add_blank_page(100, 100)
+    font = DictionaryObject(
+        {
+            NameObject("/Type"): NameObject("/Font"),
+            NameObject("/Subtype"): NameObject("/Type1"),
+            NameObject("/BaseFont"): NameObject("/Helvetica"),
+        }
+    )
+    page[NameObject("/Resources")] = DictionaryObject(
+        {NameObject("/Font"): DictionaryObject({NameObject("/F1"): writer._add_object(font)})}
+    )
+    content = ContentStream(None, writer)
+    content.set_data(b"BT /F1 12 Tf 10 10 Td (Hello) Tj ET")
+    page.replace_contents(content)
+    content_stream = page["/Contents"].get_object()
+    assert isinstance(content_stream, ContentStream)
+
+    with mock.patch.object(
+        ContentStream, "_parse_content_stream", autospec=True, side_effect=ContentStream._parse_content_stream
+    ) as parse:
+        assert page.extract_text() == "Hello"
+        page.extract_text(extraction_mode="layout")
+
+    parse.assert_not_called()
+    assert content_stream._operations == []
+    assert content_stream.get_data() == b"BT /F1 12 Tf 10 10 Td (Hello) Tj ET"
