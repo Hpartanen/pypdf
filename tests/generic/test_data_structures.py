@@ -1357,3 +1357,62 @@ def test_dictionary_object__clone__chain_with_direct_dictionary() -> None:
     assert last_clone == last
     assert last_clone is not last
     assert getattr(last_clone, "indirect_reference", None) is None
+
+
+# Simple tokens and tokens that take the generic parsing (a string, an array, an
+# inline image), in between and after each other.
+_MIXED_CONTENT = (
+    b"q 1 0 0 1 10.5 -2 cm /GS1 gs (a\\)b) Tj [1 (x) -2.5] TJ "
+    b"BI /W 1 /H 1 /BPC 8 /CS /G ID \x7f EI 3 4 m 1 2 l 3 4 l S /F1 12 Tf Q"
+)
+
+
+def _content_stream(data: bytes) -> ContentStream:
+    stream = DecodedStreamObject()
+    stream.set_data(data)
+    return ContentStream(stream, None)
+
+
+def test_content_stream__parse__mixed_tokens() -> None:
+    from pypdf.generic import FloatObject  # noqa: PLC0415
+
+    operations = _content_stream(_MIXED_CONTENT).operations
+
+    assert [operator for _, operator in operations] == [
+        b"q", b"cm", b"gs", b"Tj", b"TJ", b"INLINE IMAGE", b"m", b"l", b"l", b"S", b"Tf", b"Q"
+    ]
+    assert operations[1][0] == [1, 0, 0, 1, 10.5, -2]
+    assert [type(operand) for operand in operations[1][0]] == [NumberObject] * 4 + [FloatObject, NumberObject]
+    assert operations[2][0] == [NameObject("/GS1")]
+    assert operations[3][0] == [TextStringObject("a)b")]
+    assert operations[4][0] == [ArrayObject([NumberObject(1), TextStringObject("x"), FloatObject(-2.5)])]
+    assert operations[5][0]["data"] == b"\x7f"
+    # Operands after the generic parsing go to a list of their own.
+    assert operations[6][0] == [3, 4]
+    assert operations[7][0] == [1, 2]
+    assert operations[10][0] == [NameObject("/F1"), 12]
+    assert operations[0][0] == []
+    assert operations[0][0] is not operations[8][0]
+
+
+def test_content_stream__parse__repeated_tokens_share_one_object() -> None:
+    operations = _content_stream(b"1.5 2 /N 3 x 1.5 2 /N 3 x 1.50 y").operations
+
+    first, second, third = (operands for operands, _ in operations)
+    assert first == second
+    assert all(a is b for a, b in zip(first, second))
+    assert first[0] == third[0]
+    assert first[0] is not third[0]  # another spelling of the same number
+    assert operations[0][1] is operations[1][1]
+
+
+@pytest.mark.parametrize(("budget", "raises"), [(41, False), (40, True)])
+def test_content_stream__parse__budget_counts_every_token(budget: int, raises: bool) -> None:
+    content_stream = _content_stream(_MIXED_CONTENT)
+
+    with apply_configuration(stream_parsing_work_maximum_count=budget):
+        if raises:
+            with pytest.raises(LimitReachedError, match="^Reached maximum number of tokens per stream.$"):
+                content_stream.operations
+        else:
+            assert len(content_stream.operations) == 12
