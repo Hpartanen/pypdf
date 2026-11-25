@@ -274,5 +274,13 @@ class StreamParsingBudget:
     maximum: int | None = None
 
     def exceeded(self, message: str) -> LimitReachedError:
-        """The error for an exhausted budget, naming the setting that sets it."""
+        """
+        Build the error for an exhausted budget.
+
+        Args:
+          message: What was reached.
+
+        Returns:
+          The error, naming the setting that sets the budget and its value.
+        """
         return LimitReachedError(message, setting="stream_parsing_work_maximum_count", limit=self.maximum)

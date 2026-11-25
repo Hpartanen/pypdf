@@ -70,9 +70,12 @@ class LimitReachedError(PyPdfError):
     """
     Raised when a limit is reached.
 
-    Where the limit is a configuration value, ``setting`` names it and ``limit`` is its
-    value when the error was raised (``None`` if unknown); both are also given in the
-    message, so the setting to raise can be found from the error alone.
+    Args:
+      message: What was reached.
+      setting: The configuration value that sets the limit, if there is one. It is
+        appended to the message and kept as the ``setting`` attribute.
+      limit: The value of ``setting`` when the error was raised, if known. It is
+        appended to the message and kept as the ``limit`` attribute.
     """
 
     def __init__(self, message: str, *, setting: str | None = None, limit: int | None = None) -> None:
