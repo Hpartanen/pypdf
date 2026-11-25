@@ -1687,6 +1687,9 @@ class ContentStream(DecodedStreamObject):
             # coordinates, font and graphics state names), so each exact type
             # caches the bytes it writes, followed by the separating space.
             caches: dict[type, dict[Any, bytes]] = {FloatObject: {}, NumberObject: {}, NameObject: {}}
+            get_cache = caches.get
+            # The operator and its line end, written as one piece.
+            endings: dict[bytes, bytes] = {}
             scratch = BytesIO()
             for operands, operator in self._operations:
                 if operator == b"INLINE IMAGE":
@@ -1696,10 +1699,10 @@ class ContentStream(DecodedStreamObject):
                     append(dict_text.getvalue()[2:-2])
                     append(b"ID ")
                     append(operands["data"])
-                    append(b"EI")
+                    append(b"EI\n")
                 else:
                     for op in operands:
-                        cache = caches.get(type(op))
+                        cache = get_cache(type(op))
                         encoded = None if cache is None else cache.get(op)
                         if encoded is None:
                             scratch.seek(0)
@@ -1710,8 +1713,10 @@ class ContentStream(DecodedStreamObject):
                             if cache is not None:
                                 cache[op] = encoded
                         append(encoded)
-                    append(operator)
-                append(b"\n")
+                    ending = endings.get(operator)
+                    if ending is None:
+                        ending = endings[operator] = operator + b"\n"
+                    append(ending)
             self._data = b"".join(parts)
         return self._data
 
