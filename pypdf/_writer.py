@@ -1581,10 +1581,18 @@ class PdfWriter(PdfDocCommon):
                     current_start = idnum
                 current_stop = idnum + 1
         assert current_start > 0, "for pytest only"
-        object_blocks.append([current_start, current_stop - current_start])
         # write incremented xref
         xref_location = stream.tell()
         xr_id = len(self._objects) + 1
+        # The xref stream lists itself, so that /Size and the next increment
+        # move past its object number instead of reusing it.
+        object_positions[xr_id] = (xref_location, 0)
+        if xr_id == current_stop:
+            current_stop += 1
+        else:
+            object_blocks.append([current_start, current_stop - current_start])
+            current_start, current_stop = xr_id, xr_id + 1
+        object_blocks.append([current_start, current_stop - current_start])
         stream.write(f"{xr_id} 0 obj".encode())
         init_data = {
             NameObject("/Type"): NameObject("/XRef"),

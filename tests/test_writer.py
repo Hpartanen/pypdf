@@ -4134,6 +4134,31 @@ def test_incremental__keeps_generation_of_updated_objects():
         assert value in appearance.get_data()
 
 
+def test_incremental__xref_stream_number_is_not_reused():
+    """A second increment must not give a new object the first increment's xref stream number."""
+    writer = PdfWriter()
+    writer.add_blank_page(100, 100)
+    data = BytesIO()
+    writer.write(data)
+    data = base = data.getvalue()
+    for value in (1, 2):
+        writer = PdfWriter(BytesIO(data), incremental=True)
+        writer.root_object[NameObject("/Probe")] = writer._add_object(
+            DictionaryObject({NameObject("/Value"): NumberObject(value)})
+        )
+        out = BytesIO()
+        writer.write(out)
+        data = out.getvalue()
+
+    reader = PdfReader(BytesIO(data))
+    assert reader.trailer["/Root"]["/Probe"] == {"/Value": 2}
+    numbers = [int(n) for n in re.findall(rb"(\d+) 0 obj", data)]
+    catalog = reader.trailer.raw_get("/Root").idnum
+    assert {n for n in numbers if numbers.count(n) > 1} == {catalog}  # rewritten by each increment
+    increments = {int(n) for n in re.findall(rb"(\d+) 0 obj", data[len(base):])}
+    assert reader.xref[0].keys() >= increments  # xref streams included
+
+
 def test_merge_with_null_acroform_does_not_raise_typeerror():
     """
     Source PDFs may contain '/AcroForm null'.
