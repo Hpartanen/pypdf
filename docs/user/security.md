@@ -57,6 +57,15 @@ For *PdfWriter* instances, the following limits are employed for incremental rea
 * `incremental_clone_object_id_limit` limits the maximum object ID to read during cloning. It defaults to
   1 000 000. Setting it to `None` will fully disable this limit.
 
+### Parsing content streams
+
+The global `stream_parsing_work_maximum_count` limits the tokens (operators, operands and the elements of
+nested arrays and dictionaries) parsed from one content stream. It defaults to 2 000 000. The parsed
+operations are held in memory, so the limit bounds the memory one stream may take. Large vector drawings,
+such as sheets exported from CAD software, can exceed it; raise it with `apply_configuration` for files you
+trust. The {py:class}`~pypdf.errors.LimitReachedError` raised names the setting and its value, and carries
+them as its `setting` and `limit` attributes.
+
 ## Reporting possible vulnerabilities
 
 Please refer to our [security policy](https://github.com/py-pdf/pypdf/security/policy).

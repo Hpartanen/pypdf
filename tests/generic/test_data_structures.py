@@ -823,9 +823,12 @@ def test_content_stream__parse_content_stream__token_limit() -> None:
     with apply_configuration(stream_parsing_work_maximum_count=100):
         content_stream = ContentStream(stream=None, pdf=None)
         with pytest.raises(
-                expected_exception=LimitReachedError, match=r"^Reached maximum number of tokens per stream\.$"
-        ):
+                expected_exception=LimitReachedError,
+                match=r"^Reached maximum number of tokens per stream \(stream_parsing_work_maximum_count=100\)\.$"
+        ) as exception_info:
             content_stream._parse_content_stream(BytesIO(data))
+        assert exception_info.value.setting == "stream_parsing_work_maximum_count"
+        assert exception_info.value.limit == 100
         assert content_stream.operations == [
             ([0.0001, 0.0001], b"Td")
         ] * 33
@@ -835,10 +838,15 @@ def test_content_stream__parse_content_stream__token_limit() -> None:
     with apply_configuration(stream_parsing_work_maximum_count=10):
         content_stream = ContentStream(stream=None, pdf=None)
         with pytest.raises(
-                expected_exception=LimitReachedError, match=r"^Reached maximum number of tokens\.$"
+                expected_exception=LimitReachedError,
+                match=r"^Reached maximum number of tokens \(stream_parsing_work_maximum_count=10\)\.$"
         ):
             content_stream._parse_content_stream(BytesIO(data))
         assert content_stream.operations == []
+
+
+# A budget built directly, not from the configuration, names the setting but no value.
+TOKEN_BUDGET_WITHOUT_VALUE = r"^Reached maximum number of tokens \(stream_parsing_work_maximum_count\)\.$"
 
 
 def test_array_object__read_from_stream__token_limit() -> None:
@@ -860,13 +868,13 @@ def test_array_object__read_from_stream__token_limit() -> None:
     assert parsing_budget.remaining_budget == 2
 
     # Too strict budget.
-    with pytest.raises(expected_exception=LimitReachedError, match=r"^Reached maximum number of tokens\.$"):
+    with pytest.raises(expected_exception=LimitReachedError, match=TOKEN_BUDGET_WITHOUT_VALUE):
         ArrayObject.read_from_stream(BytesIO(data), pdf=pdf, parsing_budget=parsing_budget)  # type: ignore[arg-type]
     assert parsing_budget.remaining_budget == -1
 
     # NullObject handling.
     null_data = b"[ " + b"null " * 11 + b"]"
-    with pytest.raises(expected_exception=LimitReachedError, match=r"^Reached maximum number of tokens\.$"):
+    with pytest.raises(expected_exception=LimitReachedError, match=TOKEN_BUDGET_WITHOUT_VALUE):
         ArrayObject.read_from_stream(
             BytesIO(null_data),
             pdf=pdf,  # type: ignore[arg-type]
@@ -924,7 +932,7 @@ def test_dictionary_object__read_from_stream__token_limit() -> None:
     assert parsing_budget.remaining_budget == 2
 
     # Too strict budget.
-    with pytest.raises(expected_exception=LimitReachedError, match=r"^Reached maximum number of tokens\.$"):
+    with pytest.raises(expected_exception=LimitReachedError, match=TOKEN_BUDGET_WITHOUT_VALUE):
         DictionaryObject.read_from_stream(BytesIO(data), pdf=pdf, parsing_budget=parsing_budget)  # type: ignore[arg-type]
     assert parsing_budget.remaining_budget == -2  # Decrements of 2.
 

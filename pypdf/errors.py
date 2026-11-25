@@ -67,7 +67,21 @@ STREAM_TRUNCATED_PREMATURELY = "Stream has ended unexpectedly"
 
 
 class LimitReachedError(PyPdfError):
-    """Raised when a limit is reached."""
+    """
+    Raised when a limit is reached.
+
+    Where the limit is a configuration value, ``setting`` names it and ``limit`` is its
+    value when the error was raised (``None`` if unknown); both are also given in the
+    message, so the setting to raise can be found from the error alone.
+    """
+
+    def __init__(self, message: str, *, setting: str | None = None, limit: int | None = None) -> None:
+        if setting is not None:
+            named = setting if limit is None else f"{setting}={limit}"
+            message = f"{message.rstrip('.')} ({named})."
+        super().__init__(message)
+        self.setting = setting
+        self.limit = limit
 
 
 class XmpDocumentError(PyPdfError, RuntimeError):

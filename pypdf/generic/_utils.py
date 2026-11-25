@@ -4,7 +4,7 @@ from typing import Union
 
 from .._codecs import _pdfdoc_encoding
 from .._utils import StreamType, logger_warning, read_non_whitespace
-from ..errors import STREAM_TRUNCATED_PREMATURELY, PdfStreamError
+from ..errors import STREAM_TRUNCATED_PREMATURELY, LimitReachedError, PdfStreamError
 from ._base import ByteStringObject, TextStringObject
 
 _PDFDOC_DECODE_MAP = dict(enumerate(_pdfdoc_encoding))
@@ -270,3 +270,9 @@ class StreamParsingBudget:
     cumulative budget across nested arrays and dictionaries.
     """
     remaining_budget: int
+    #: The configured ``stream_parsing_work_maximum_count`` this budget started from, if any.
+    maximum: int | None = None
+
+    def exceeded(self, message: str) -> LimitReachedError:
+        """The error for an exhausted budget, naming the setting that sets it."""
+        return LimitReachedError(message, setting="stream_parsing_work_maximum_count", limit=self.maximum)

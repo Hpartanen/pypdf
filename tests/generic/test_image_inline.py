@@ -259,7 +259,10 @@ def test_read_inline_image__parsing_budget(budget: int) -> None:
     data = b"<< [ 0 1 2 3 4 5 6 7 8 9 10 ] << /Key1 42 /Key2 1337 >> >>"
 
     content_stream = ContentStream(stream=None, pdf=None)
-    with pytest.raises(expected_exception=LimitReachedError, match=r"^Reached maximum number of tokens\.$"):
+    with pytest.raises(
+            expected_exception=LimitReachedError,
+            match=r"^Reached maximum number of tokens \(stream_parsing_work_maximum_count\)\.$"
+    ):
         read_inline_image(
             content_stream=content_stream,
             stream=BytesIO(data),

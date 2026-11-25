@@ -251,7 +251,7 @@ class ArrayObject(list[Any], PdfObject):
         if parsing_budget is not None:
             parsing_budget.remaining_budget -= 1
             if parsing_budget.remaining_budget < 0:
-                raise LimitReachedError("Reached maximum number of tokens.")
+                raise parsing_budget.exceeded("Reached maximum number of tokens.")
         return remaining_elements
 
     @staticmethod
@@ -684,7 +684,7 @@ class DictionaryObject(dict[Any, Any], PdfObject):
             if parsing_budget is not None:
                 parsing_budget.remaining_budget -= 2
                 if parsing_budget.remaining_budget < 0:
-                    raise LimitReachedError("Reached maximum number of tokens.")
+                    raise parsing_budget.exceeded("Reached maximum number of tokens.")
 
             try:
                 try:
@@ -1559,14 +1559,15 @@ class ContentStream(DecodedStreamObject):
                 raise LimitReachedError("Reached maximum number of tokens.")
         parsing_budget.remaining_budget -= token_decrement
         if parsing_budget.remaining_budget < 0:
-            raise LimitReachedError("Reached maximum number of tokens per stream.")
+            raise parsing_budget.exceeded("Reached maximum number of tokens per stream.")
         return remaining_elements
 
     def _parse_content_stream(self, stream: StreamType) -> None:
         # 7.8.2 Content Streams
         stream.seek(0, 0)
         operands: list[int | str | PdfObject] = []
-        parsing_budget = StreamParsingBudget(remaining_budget=get_configuration().stream_parsing_work_maximum_count)
+        maximum = get_configuration().stream_parsing_work_maximum_count
+        parsing_budget = StreamParsingBudget(remaining_budget=maximum, maximum=maximum)
         while True:
             peek = read_non_whitespace(stream)
             if peek in (b"", 0):
